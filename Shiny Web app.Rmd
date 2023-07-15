@@ -53,15 +53,8 @@ max_month_currYear <- sales %>%
 
 ```
 
-I am the analyst of a famous retail brand. I performed sales forecasting for upcoming time periods to help my colleagues to explore the forecasts. Here is my web application:
 
 ## Provide a current week performance indicator in the UI showing current week's actual sales vs. forecast for the current week computed at the end of the last week.
-
-In this first analysis, I provide a performance indicator in the UI that compares the actual sales for the current week with the forecast computed at the end of the last week. The actual sales and forecast data are filtered based on the current week. If data is available for the current week, the code calculates the performance indicator. If data is not available, a message is displayed indicating that the data is not yet available for the current week.
-
-The performance indicator is calculated by comparing the actual sales value with the forecast value for the current week. This provides insights into how well the sales forecast performed for the current week. The performance indicator is then displayed in the UI to provide a snapshot of the current week's performance relative to the forecast.
-
-The code ensures that the forecast is computed at the end of the last week to capture the most accurate and up-to-date forecast data.
 
 
 
@@ -106,83 +99,6 @@ renderDataTable({
     )
   sales_pred_eval
   
-})
-
-```
-
-## Generate sales forecast for a specific future quarter (during the upcoming year) selected in the UI.
-
-```{r, echo=FALSE}
-library(shiny)
-library(forecast)
-library(tidyverse)
-library(plotly)
-
-# Define store_min and store_max
-store_min <- 1
-store_max <- 45
-
-# Input Panels
-inputPanel(
-  selectInput(
-    "store_1",
-    label = "Select Store: ",
-    choices = 1:max(sales$Store),
-    selected = 1
-  ),
-
-  selectInput(
-    "quarter_1",
-    label = "Select Quarter: ",
-    choices = c(
-      "Q1: Jan-Mar" = 1, 
-      "Q2: Apr-Jun" = 2, 
-      "Q3: Jul-Sep" = 3, 
-      "Q4: Oct-Dec" = 4
-    ),
-    selected = 1
-  )
-)
-
-renderPlot({
-  # Calculate the monthly sums and filter the store to analyze the quarters
-  sales_1 <- sales %>%
-    filter(Store == input$store_1) %>%
-    group_by(Year, Quarter, Month) %>%
-    summarize(Monthly_Sales = sum(Weekly_Sales))
-  
-  sales_hist_ts <- ts(sales_1$Monthly_Sales, frequency = 12)
-  
-  # methodological details:
-  #  https://otexts.com/fpp3/arima.html
-  # ARIMA: Auto-Regressive Integrated Moving Average
-  arima_model <- auto.arima(sales_hist_ts, seasonal.test = "seas")
-  
-  # forecast horizon to match most recent quarter
-  arima_pred <- forecast(arima_model, h = 12)
-  
-  # format the dataframe
-  sales_pred_eval <-
-    data.frame(Prediction = as.numeric(arima_pred$mean),
-               Month = seq.int(1, 12))
-  
-  # add quarters to the months
-  sales_pred_eval$Quarter <- ceiling(sales_pred_eval$Month / 3)
-  
-  # filter, to show only the selected quarter
-  sales_pred_eval <- sales_pred_eval %>%
-    filter(Quarter == input$quarter_1)
-  
-  # add adaptive labels
-  quarter_text <- paste("Quarter", input$quarter_1)
-  
-  # plot chart
-  ggplot() +
-    geom_line(data = sales_pred_eval,
-              aes(x = Month, y = Prediction, color = quarter_text)) +
-    xlab("Months") +
-    ylab("Forecast Sales") +
-    theme_bw()
 })
 
 ```
@@ -248,114 +164,6 @@ server <- function(input, output) {
                                  Forecast = forecasted_sales$mean)
     
     forecast_table
-  })
-}
-
-# Run the app
-shinyApp(ui = ui, server = server)
-```
-
-
-## Incorporate a UI functionality to compare monthly sales between the past year (actual) and the upcoming year (forecast).
-
-```{r, echo=FALSE}
-library(shiny)
-library(forecast)
-
-# Define UI
-ui <- fluidPage(
-  titlePanel("Sales Forecast Comparison"),
-  sidebarLayout(
-    sidebarPanel(
-      selectInput(
-        "store_5",
-        label = "Select Store:",
-        choices = 1:max(sales$Store),
-        selected = 1
-      ),
-      sliderInput(
-        inputId = "slider_start",
-        label = "Start Month:",
-        min = 1,
-        max = max_month_currYear,
-        value = 1
-      ),
-      sliderInput(
-        inputId = "slider_end",
-        label = "End Month:",
-        min = 1,
-        max = max_month_currYear,
-        value = max_month_currYear
-      )
-    ),
-    mainPanel(
-      plotOutput("salesPlot")
-    )
-  )
-)
-
-# Define server
-server <- function(input, output) {
-  # Generate the sales forecast comparison plot
-  output$salesPlot <- renderPlot({
-    # Filter sales data for the selected store
-    sales_5 <- sales %>% filter(Store == input$store_5)
-    
-    # Calculate time series
-    sales_hist_ts <- ts(sales_5$Weekly_Sales, frequency = 52)
-    
-    # ARIMA: Auto-Regressive Integrated Moving Average
-    # methodological details:
-    #  https://otexts.com/fpp3/arima.html
-    arima_model <- auto.arima(sales_hist_ts, seasonal.test = "seas")
-    
-    # forecast horizon
-    arima_pred <- forecast(arima_model, h = 52)
-    
-    # Format data frame with forecasted sales
-    sales_pred_eval <- data.frame(
-      Prediction = as.numeric(arima_pred$mean),
-      Week = seq.int(max(sales_5$Week) + 1, max(sales_5$Week) + 52)
-    )
-    
-    # Add Year and Month to data frame
-    sales_pred_eval$Year <- floor((sales_pred_eval$Week) / 52) + 1
-    sales_pred_eval$Month <- floor((sales_pred_eval$Week - (sales_pred_eval$Year - 1) * 52) / (52 / 12)) + 1
-    
-    # Filter months selected by sliders
-    sales_pred_eval <- sales_pred_eval %>%
-      filter(Month >= input$slider_start) %>%
-      filter(Month <= input$slider_end)
-    
-    # Add week since the start of the year to compare with forecast
-    sales_pred_eval$year_week <- sales_pred_eval$Week - (sales_pred_eval$Year - 1) * 52
-    
-    # Filter months selected by sliders for historical sales
-    hist_sales <- sales_5 %>%
-      filter(Year == year_max) %>%
-      filter(Month >= input$slider_start) %>%
-      filter(Month <= input$slider_end)
-    
-    # Add week since the start of the year to compare with forecast
-    hist_sales$year_week <- hist_sales$Week - (hist_sales$Year - 1) * 52
-    
-    # Plot forecast and the current year based on filters
-    ggplot() +
-      geom_line(
-        data = sales_pred_eval,
-        aes(x = year_week, y = Prediction, color = "Forecast Next Year")
-      ) +
-      geom_line(
-        data = hist_sales,
-        aes(x = year_week, y = Weekly_Sales, color = "Current Year")
-      ) +
-      xlab("Weeks") +
-      ylab("Sales") +
-      scale_color_manual(
-        values = c("Current Year" = "green", "Forecast Next Year" = "red")
-      ) +
-      labs(color = '') +
-      theme_bw()
   })
 }
 
