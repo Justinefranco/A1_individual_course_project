@@ -122,6 +122,7 @@ library(shiny)
 library(forecast)
 library(tidyverse)
 library(plotly)
+library(ggplot2)
 
 # Define store_min and store_max
 store_min <- 1
